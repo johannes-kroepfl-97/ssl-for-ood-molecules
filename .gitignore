@@ -20,12 +20,11 @@ Thumbs.db
 .idea/
 
 # Data & artifacts
-data/raw/
-data/processed/
-data/cache/
-reports/runs/
-reports/figures/
-reports/tables/
+data/
+!src/ssl_for_ood/data/
+!src/ssl_for_ood/data/**
+
+reports/
 
 # Models / checkpoints
 *.pt
