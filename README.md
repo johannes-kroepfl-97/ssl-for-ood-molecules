@@ -8,12 +8,14 @@ In this repository we explore evaluate self-supervised learning methods for meas
 
 We use three sequence–function datasets that differ in modality, sequence length, and mutation structure:
 
-- GFP – Protein fluorescence prediction (InstaDeepAI / true-cds-protein-tasks)
-- AAV – AAV capsid fitness landscape (AI4Protein / FLIP_AAV_des-mut)
+- GFP – Protein fluorescence prediction (taken from https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/tree/main/DMS_substitutions where we selected for DMS_id=='GFP_AEQVI_Sarkisyan_2016')
+- AAV – AAV capsid fitness landscape (taken from https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/tree/main/DMS_substitutions where we selected for DMS_id=='CAPSD_AAV2S_Sinai_2021')
 - TFBind8 – DNA–protein binding (TFBind8, SIX6_REF_R1; Design-Bench)
 
 All datasets are converted to a common CSV schema:
 sequence (string), label (float), mut_dist (mutation distance), split.
+
+All mutation distances are computed by using a wild type. The wild types for GFP and AAV are provided by protein gym in the column "target_seq". The wild type for TFBind8 got selected randomly.
 
 ### Split Strategy (ID → near-OOD → far-OOD)
 
