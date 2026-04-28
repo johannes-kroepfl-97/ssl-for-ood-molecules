@@ -1,0 +1,36 @@
+model_name: lstm_cnn
+seed: 42
+output:
+  base_dir: results/training
+  run_name: null
+mlflow:
+  enabled: true
+  tracking_uri: http://127.0.0.1:5000
+  experiment_name: ssl-ood-lstm-cnn
+  run_name: lstm_cnn__manual
+training:
+  batch_size: 64
+  epochs: 400
+  learning_rate: 0.001
+  weight_decay: 0.0
+  loss: mse
+  early_stopping_patience: 20
+  lr_scheduler_factor: 0.5
+  lr_scheduler_patience: 5
+  accelerator: auto
+  devices: auto
+  deterministic: true
+  enable_progress_bar: true
+  log_every_n_steps: 10
+  num_workers: 0
+  pin_memory: true
+  evaluate_test: false
+model:
+  lstm_hidden_dim: 32
+  lstm_layers: 2
+  cnn_channels: [32, 64, 128]
+  kernel_size: 7
+  fc_dim: 96
+  bidirectional: false
+  dropout_input: 0.0
+  dropout_hidden: 0.3

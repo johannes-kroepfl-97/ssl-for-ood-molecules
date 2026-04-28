@@ -1,4 +1,4 @@
-# Python
+# python
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -8,25 +8,29 @@ build/
 venv/
 .env
 
-# Jupyter
+# jupyter
 .ipynb_checkpoints/
 
-# OS
+# os
 .DS_Store
 Thumbs.db
 
-# IDE
+# ide
 .vscode/
 .idea/
 
-# Data & artifacts
-data/
-!src/ssl_for_ood/data/
-!src/ssl_for_ood/data/**
-
+# data and artifacts
+/data/
 reports/
+results/
+notebooks/
+notes.txt
 
-# Models / checkpoints
+# old code
+src/ssl_for_ood/architectures_old/
+src/ssl_for_ood/training_old/
+
+# models and checkpoints
 *.pt
 *.pth
 *.ckpt

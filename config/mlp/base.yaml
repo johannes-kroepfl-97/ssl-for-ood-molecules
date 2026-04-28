@@ -1,0 +1,32 @@
+model_name: mlp
+seed: 42
+output:
+  base_dir: results/training
+  run_name: null
+mlflow:
+  enabled: true
+  tracking_uri: http://127.0.0.1:5000
+  experiment_name: ssl-ood-mlp
+  run_name: mlp__manual
+training:
+  batch_size: 64
+  epochs: 400
+  learning_rate: 0.001
+  weight_decay: 0.0
+  loss: mse
+  early_stopping_patience: 20
+  lr_scheduler_factor: 0.5
+  lr_scheduler_patience: 5
+  accelerator: auto
+  devices: auto
+  deterministic: true
+  enable_progress_bar: true
+  log_every_n_steps: 10
+  num_workers: 0
+  pin_memory: true
+  evaluate_test: false
+model:
+  hidden_dims: 256
+  num_layers: 3
+  dropout_input: 0.0
+  dropout_hidden: 0.3

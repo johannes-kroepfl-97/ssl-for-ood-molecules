@@ -58,7 +58,12 @@ def _dataset_splits_dir(dataset_name: str) -> Path:
 # shared helpers (AAV-style, minimal)
 # -----------------------------
 
+# def _hamming(a: str, b: str) -> int:
+#    return sum(x != y for x, y in zip(a, b))
+
 def _hamming(a: str, b: str) -> int:
+    if len(a) != len(b):
+        raise ValueError(f"Hamming distance requires equal lengths, got {len(a)} and {len(b)}")
     return sum(x != y for x, y in zip(a, b))
 
 
@@ -172,6 +177,97 @@ def _quantile_thresholds_for_shift(
     return thr_val, thr_test
 
 
+def _sample_df_with_remaining(df: pd.DataFrame, n: int, seed: int = 42):
+    """
+    Deterministic sample without replacement, returning:
+      (sampled_df, remaining_df)
+    """
+    if n <= 0:
+        return df.iloc[0:0].copy().reset_index(drop=True), df.copy().reset_index(drop=True)
+
+    if len(df) <= n:
+        return df.copy().reset_index(drop=True), df.iloc[0:0].copy().reset_index(drop=True)
+
+    sampled = df.sample(n=n, replace=False, random_state=seed)
+    remaining = df.drop(index=sampled.index)
+
+    return sampled.reset_index(drop=True), remaining.reset_index(drop=True)
+
+
+# -----------------------------
+# ProteinGym settings for GFP / AAV
+# -----------------------------
+
+PROTEINGYM_PARQUET_LINKS = [
+    "https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/main/DMS_substitutions/train-00000-of-00005.parquet",
+    "https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/main/DMS_substitutions/train-00001-of-00005.parquet",
+    "https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/main/DMS_substitutions/train-00002-of-00005.parquet",
+    "https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/main/DMS_substitutions/train-00003-of-00005.parquet",
+    "https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/resolve/main/DMS_substitutions/train-00004-of-00005.parquet",
+]
+
+# Fill in the exact ProteinGym DMS_id values you want to use.
+# GFP WT below is your current canonical GFP sequence logic.
+# For AAV, insert the exact WT for the ProteinGym assay you choose.
+PROTEINGYM_SETTINGS = {
+    "gfp": {
+        "dms_id": "GFP_AEQVI_Sarkisyan_2016",
+        "wt_sequence": "MSKGEELFTGVVPILVELDGDVNGHKFSVSGEGEGDATYGKLTLKFICTTGKLPVPWPTLVTTLSYGVQCFSRYPDHMKQHDFFKSAMPEGYVQERTIFFKDDGNYKTRAEVKFEGDTLVNRIELKGIDFKEDGNILGHKLEYNYNSHNVYIMADKQKNGIKVNFKIRHNIEDGSVQLADHYQQNTPIGDGPVLLPDNHYLSTQSALSKDPNEKRDHMVLLEFVTAAGITHGMDELYK",
+    },
+    "aav": {
+        "dms_id": "CAPSD_AAV2S_Sinai_2021",
+        "wt_sequence": "MAADGYLPDWLEDTLSEGIRQWWKLKPGPPPPKPAERHKDDSRGLVLPGYKYLGPFNGLDKGEPVNEADAAALEHDKAYDRQLDSGDNPYLKYNHADAEFQERLKEDTSFGGNLGRAVFQAKKRVLEPLGLVEEPVKTAPGKKRPVEHSPVEPDSSSGTGKAGQQPARKRLNFGQTGDADSVPDPQPLGQPPAAPSGLGTNTMATGSGAPMADNNEGADGVGNSSGNWHCDSTWMGDRVITTSTRTWALPTYNNHLYKQISSQSGASNDNHYFGYSTPWGYFDFNRFHCHFSPRDWQRLINNNWGFRPKRLNFKLFNIQVKEVTQNDGTTTIANNLTSTVQVFTDSEYQLPYVLGSAHQGCLPPFPADVFMVPQYGYLTLNNGSQAVGRSSFYCLEYFPSQMLRTGNNFTFSYTFEDVPFHSSYAHSQSLDRLMNPLIDQYLYYLSRTNTPSGTTTQSRLQFSQAGASDIRDQSRNWLPGPCYRQQRVSKTSADNNNSEYSWTGATKYHLNGRDSLVNPGPAMASHKDDEEKFFPQSGVLIFGKQGSEKTNVDIEKVMITDEEEIRTTNPVATEQYGSVSTNLQRGNRQAATADVNTQGVLPGMVWQDRDVYLQGPIWAKIPHTDGHFHPSPLMGGFGLKHPPPQILIKNTPVPANPSTTFSAAKFASFITQYSTGQVSVEIEWELQKENSKRWNPEIQYTSNYNKSVNVDFTVDTNGVYSEPRPIGTRYLTRNL",
+    },
+}
+
+def _load_proteingym_dms_dataset(dms_id: str, wt_sequence: str) -> pd.DataFrame:
+    """
+    Load one ProteinGym DMS_substitutions assay from parquet shards and normalize
+    to the common schema: sequence, label.
+    """
+    ds = load_dataset("parquet", data_files={"train": PROTEINGYM_PARQUET_LINKS})
+    df = ds["train"].to_pandas()
+
+    required_cols = {"mutated_sequence", "target_seq", "DMS_score", "DMS_id"}
+    missing = required_cols - set(df.columns)
+    if missing:
+        raise ValueError(
+            f"ProteinGym parquet is missing required columns: {sorted(missing)}. "
+            f"Found: {list(df.columns)}"
+        )
+
+    df = df[df["DMS_id"] == dms_id].copy().reset_index(drop=True)
+    if len(df) == 0:
+        raise ValueError(f"No rows found in ProteinGym for DMS_id='{dms_id}'")
+
+    df["sequence"] = df["mutated_sequence"].astype(str).str.upper()
+    df["label"] = pd.to_numeric(df["DMS_score"], errors="coerce")
+    df["target_seq"] = df["target_seq"].astype(str).str.upper()
+
+    df = df.dropna(subset=["sequence", "label"]).copy()
+
+    target_seq_values = df["target_seq"].dropna().unique().tolist()
+    if len(target_seq_values) == 0:
+        raise ValueError(f"No target_seq values available for DMS_id='{dms_id}'")
+
+    if len(set(target_seq_values)) > 1:
+        raise ValueError(
+            f"Expected a single target_seq for DMS_id='{dms_id}', "
+            f"got {len(set(target_seq_values))}"
+        )
+
+    protein_gym_wt = target_seq_values[0]
+    if protein_gym_wt != wt_sequence.upper():
+        raise ValueError(
+            f"Configured WT does not match ProteinGym target_seq for DMS_id='{dms_id}'.\n"
+            f"Configured WT length={len(wt_sequence)}\n"
+            f"ProteinGym target_seq length={len(protein_gym_wt)}"
+        )
+
+    df = df[["sequence", "label"]].drop_duplicates(subset="sequence").reset_index(drop=True)
+    return df
+
+
 # Naming: common in domain adaptation literature
 TARGET_UNLABELED_FNAME = "target_unlabeled.csv"
 
@@ -182,55 +278,52 @@ TARGET_UNLABELED_FNAME = "target_unlabeled.csv"
 
 def load_gfp_data():
     """
-    Produces:
-      train.csv            (ID train)
-      val_id.csv           (ID validation for early stopping)
-      val_ood.csv          (near-OOD validation for hyperparameter selection)
-      target_unlabeled.csv (remaining near-OOD pool not used in val_ood; for SSL/DA; ignore labels)
-      test.csv             (far-OOD test)
-      metadata.txt
-
-    Returns:
-      (train_df, val_ood_df, test_df, out_dir)
+    GFP loader from ProteinGym using:
+      - DMS_id: GFP_AEQVI_Sarkisyan_2016
+      - WT: target_seq from ProteinGym
     """
-    repo_id = "InstaDeepAI/true-cds-protein-tasks"
-    subset = "fluorescence"
-    ds = load_dataset(repo_id, name=subset)
+    settings = PROTEINGYM_SETTINGS["gfp"]
+    repo_id = "OATML-Markslab/ProteinGym_v1"
+    dms_id = settings["dms_id"]
+    core = settings["wt_sequence"].upper()
 
-    # Merge all splits, then re-split by mut_dist bands
-    all_seqs = []
-    all_labels = []
-    for split_name in ds.keys():
-        all_seqs.extend([str(s) for s in ds[split_name]["sequence"]])
-        all_labels.extend([float(y) for y in ds[split_name]["label"]])
+    df = _load_proteingym_dms_dataset(dms_id=dms_id, wt_sequence=core)
 
-    df = pd.DataFrame({"sequence": all_seqs, "label": all_labels})
+    df["seq_len"] = df["sequence"].apply(len)
+    df = df[df["seq_len"] == len(core)].copy().reset_index(drop=True)
+    L_mode = len(core)
 
-    # Fixed length for Hamming
-    df, L_mode = _filter_to_dominant_length(df, seq_col="sequence")
+    if len(df) == 0:
+        raise ValueError("GFP dataset is empty after filtering to WT length.")
 
-    # Core: consensus on combined pool
-    core = _consensus_anchor_fixed(df["sequence"].tolist())
-
-    # Distances
     df = _add_mutation_distance(df, core=core, seq_col="sequence")
 
-    # Quantile bands (defaults):
-    # val_ood starts at 70th percentile, test at 90th percentile
-    thr_val, thr_test = _quantile_thresholds_for_shift(df["mut_dist"], q_val_ood=0.70, q_test=0.90)
+    thr_val, thr_test = _quantile_thresholds_for_shift(
+        df["mut_dist"],
+        q_val_ood=0.70,
+        q_test=0.90,
+    )
 
     id_pool = df[df["mut_dist"] < thr_val].copy().reset_index(drop=True)
-    val_ood_pool = df[(df["mut_dist"] >= thr_val) & (df["mut_dist"] < thr_test)].copy().reset_index(drop=True)
+    val_ood_pool = df[
+        (df["mut_dist"] >= thr_val) & (df["mut_dist"] < thr_test)
+    ].copy().reset_index(drop=True)
     test_pool = df[df["mut_dist"] >= thr_test].copy().reset_index(drop=True)
 
-    # val_id from ID pool (10%) and remaining is train
-    train_id_pool, val_id_df_raw = _split_id_train_val_id(id_pool, val_id_frac=0.10, seed=42)
+    if len(id_pool) == 0:
+        raise ValueError("GFP ID pool is empty. Check WT or thresholds.")
+    if len(val_ood_pool) == 0:
+        raise ValueError("GFP val_ood pool is empty. Check WT or thresholds.")
+    if len(test_pool) == 0:
+        raise ValueError("GFP test pool is empty. Check WT or thresholds.")
 
-    # cap near-OOD val to 5000 for predictable tuning cost
-    val_ood_df_raw = _sample_df(val_ood_pool, n=5000, seed=42)
+    train_id_pool, val_id_df_raw = _split_id_train_val_id(
+        id_pool, val_id_frac=0.10, seed=42
+    )
 
-    # target_unlabeled: remaining near-OOD pool not used in val_ood (for DA/SSL)
-    target_unlabeled_raw = val_ood_pool.drop(index=val_ood_df_raw.index, errors="ignore").copy().reset_index(drop=True)
+    val_ood_df_raw, target_unlabeled_raw = _sample_df_with_remaining(
+        val_ood_pool, n=5000, seed=42
+    )
 
     train_df = _finalize_schema(train_id_pool, split_name="train")
     val_id_df = _finalize_schema(val_id_df_raw, split_name="val_id")
@@ -243,13 +336,17 @@ def load_gfp_data():
     meta_lines = [
         "dataset=gfp",
         f"repo_id={repo_id}",
-        f"subset={subset}",
-        f"hf_splits_present={list(ds.keys())}",
+        "source_config=DMS_substitutions",
+        f"dms_id={dms_id}",
         f"data_root={DATA_ROOT}",
         f"out_dir={out_dir}",
+        "source_sequence_column=mutated_sequence",
+        "source_label_column=DMS_score",
+        "source_wt_column=target_seq",
         f"dominant_length_L_mode={L_mode}",
-        "core_definition=consensus_on_combined_filtered_pool",
         f"core_length={len(core)}",
+        f"core_sequence={core}",
+        "duplicates_removed=True",
         "split_strategy=disjoint_mut_dist_bands",
         "band_definitions=train: mut_dist < thr_val; val_ood: thr_val <= mut_dist < thr_test; test: mut_dist >= thr_test",
         "val_id_definition=10% random sample from train band (ID) for early stopping",
@@ -279,7 +376,7 @@ def load_gfp_data():
         meta_lines=meta_lines,
     )
 
-    return train_df, val_ood_df, test_df, str(out_dir)
+    return train_df, val_id_df, val_ood_df, target_unlabeled_df, test_df, str(out_dir)
 
 
 # -----------------------------
@@ -288,57 +385,52 @@ def load_gfp_data():
 
 def load_aav_data():
     """
-    Same outputs as GFP:
-      train.csv, val_id.csv, val_ood.csv, target_unlabeled.csv, test.csv, metadata.txt
-
-    Returns:
-      (train_df, val_ood_df, test_df, out_dir)
+    AAV loader from ProteinGym using:
+      - DMS_id: CAPSD_AAV2S_Sinai_2021
+      - WT: target_seq from ProteinGym
     """
-    import pandas as pd
-    from huggingface_hub import hf_hub_download
+    settings = PROTEINGYM_SETTINGS["aav"]
+    repo_id = "OATML-Markslab/ProteinGym_v1"
+    dms_id = settings["dms_id"]
+    core = settings["wt_sequence"].upper()
 
-    repo_id = "AI4Protein/FLIP_AAV_des-mut"
+    df = _load_proteingym_dms_dataset(dms_id=dms_id, wt_sequence=core)
 
-    def _download_split_df(split_name: str):
-        filename = f"{split_name}.csv"
-        path = hf_hub_download(repo_id=repo_id, filename=filename, repo_type="dataset")
-        return pd.read_csv(path), path
+    df["seq_len"] = df["sequence"].apply(len)
+    df = df[df["seq_len"] == len(core)].copy().reset_index(drop=True)
+    L_mode = len(core)
 
-    train_raw, train_path = _download_split_df("train")
-    valid_raw, valid_path = _download_split_df("valid")
-    test_raw, test_path = _download_split_df("test")
+    if len(df) == 0:
+        raise ValueError("AAV dataset is empty after filtering to WT length.")
 
-    # Merge official splits, then re-split by mut_dist bands
-    df = pd.concat([train_raw, valid_raw, test_raw], axis=0, ignore_index=True)
-
-    # Normalize columns
-    df["sequence"] = df["aa_seq"].astype(str)
-    df["label"] = df["label"].astype(float)
-    df = df[["sequence", "label"]]
-
-    # Fixed length for Hamming
-    df, L_mode = _filter_to_dominant_length(df, seq_col="sequence")
-
-    # Core: consensus on combined pool
-    core = _consensus_anchor_fixed(df["sequence"].tolist())
-
-    # Distances
     df = _add_mutation_distance(df, core=core, seq_col="sequence")
 
-    # AAV is large; use slightly stricter banding:
-    # val_ood at 75th percentile, test at 90th percentile
-    thr_val, thr_test = _quantile_thresholds_for_shift(df["mut_dist"], q_val_ood=0.75, q_test=0.90)
+    thr_val, thr_test = _quantile_thresholds_for_shift(
+        df["mut_dist"],
+        q_val_ood=0.75,
+        q_test=0.90,
+    )
 
     id_pool = df[df["mut_dist"] < thr_val].copy().reset_index(drop=True)
-    val_ood_pool = df[(df["mut_dist"] >= thr_val) & (df["mut_dist"] < thr_test)].copy().reset_index(drop=True)
+    val_ood_pool = df[
+        (df["mut_dist"] >= thr_val) & (df["mut_dist"] < thr_test)
+    ].copy().reset_index(drop=True)
     test_pool = df[df["mut_dist"] >= thr_test].copy().reset_index(drop=True)
 
-    train_id_pool, val_id_df_raw = _split_id_train_val_id(id_pool, val_id_frac=0.10, seed=42)
+    if len(id_pool) == 0:
+        raise ValueError("AAV ID pool is empty. Check WT or thresholds.")
+    if len(val_ood_pool) == 0:
+        raise ValueError("AAV val_ood pool is empty. Check WT or thresholds.")
+    if len(test_pool) == 0:
+        raise ValueError("AAV test pool is empty. Check WT or thresholds.")
 
-    # cap near-OOD val to 5000
-    val_ood_df_raw = _sample_df(val_ood_pool, n=5000, seed=42)
+    train_id_pool, val_id_df_raw = _split_id_train_val_id(
+        id_pool, val_id_frac=0.10, seed=42
+    )
 
-    target_unlabeled_raw = val_ood_pool.drop(index=val_ood_df_raw.index, errors="ignore").copy().reset_index(drop=True)
+    val_ood_df_raw, target_unlabeled_raw = _sample_df_with_remaining(
+        val_ood_pool, n=5000, seed=42
+    )
 
     train_df = _finalize_schema(train_id_pool, split_name="train")
     val_id_df = _finalize_schema(val_id_df_raw, split_name="val_id")
@@ -351,14 +443,17 @@ def load_aav_data():
     meta_lines = [
         "dataset=aav",
         f"repo_id={repo_id}",
-        f"train_source={train_path}",
-        f"valid_source={valid_path}",
-        f"test_source={test_path}",
+        "source_config=DMS_substitutions",
+        f"dms_id={dms_id}",
         f"data_root={DATA_ROOT}",
         f"out_dir={out_dir}",
+        "source_sequence_column=mutated_sequence",
+        "source_label_column=DMS_score",
+        "source_wt_column=target_seq",
         f"dominant_length_L_mode={L_mode}",
-        "core_definition=consensus_on_combined_filtered_pool",
         f"core_length={len(core)}",
+        f"core_sequence={core}",
+        "duplicates_removed=True",
         "split_strategy=disjoint_mut_dist_bands",
         "band_definitions=train: mut_dist < thr_val; val_ood: thr_val <= mut_dist < thr_test; test: mut_dist >= thr_test",
         "val_id_definition=10% random sample from train band (ID) for early stopping",
@@ -388,8 +483,7 @@ def load_aav_data():
         meta_lines=meta_lines,
     )
 
-    return train_df, val_ood_df, test_df, str(out_dir)
-
+    return train_df, val_id_df, val_ood_df, target_unlabeled_df, test_df, str(out_dir)
 
 # -----------------------------
 # TFBind8
@@ -522,7 +616,7 @@ def load_tfbind8_data():
         meta_lines=meta_lines,
     )
 
-    return train_df, val_ood_df, test_df, str(out_dir)
+    return train_df, val_id_df, val_ood_df, target_unlabeled_df, test_df, str(out_dir)
 
 
 # -----------------------------

@@ -1,0 +1,10 @@
+training:
+  batch_size: [32, 64, 128]
+  learning_rate: [0.001, 0.0005, 0.0001]
+  weight_decay: [0.0, 0.0001, 0.001]
+model:
+  channels: [[32, 64], [32, 64, 128], [64, 128]]
+  kernel_size: [3, 5, 7]
+  fc_dim: [64, 96, 128]
+  dropout_input: [0.0, 0.1, 0.2]
+  dropout_hidden: [0.2, 0.3, 0.5]

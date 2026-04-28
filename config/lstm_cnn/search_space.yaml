@@ -1,0 +1,13 @@
+training:
+  batch_size: [32, 64, 128]
+  learning_rate: [0.001, 0.0005, 0.0001]
+  weight_decay: [0.0, 0.0001, 0.001]
+model:
+  lstm_hidden_dim: [32, 64, 128]
+  lstm_layers: [1, 2, 3]
+  cnn_channels: [[32, 64], [64, 128], [32, 64, 128]]
+  kernel_size: [3, 5, 7]
+  fc_dim: [64, 96, 128]
+  bidirectional: [false, true]
+  dropout_input: [0.0, 0.1, 0.2]
+  dropout_hidden: [0.2, 0.3, 0.5]
