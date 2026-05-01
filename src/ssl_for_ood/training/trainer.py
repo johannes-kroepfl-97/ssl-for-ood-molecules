@@ -173,6 +173,8 @@ def save_yaml(path: str | Path, payload: dict[str, Any]) -> Path:
 
 
 def build_model(model_name: str, model_cfg: dict[str, Any], vocab_size: int, seq_len: int):
+    normalization_strategy = model_cfg.get("normalization_strategy", None)
+
     if model_name == "mlp":
         return MLPRegressor(
             vocab_size=vocab_size,
@@ -181,7 +183,9 @@ def build_model(model_name: str, model_cfg: dict[str, Any], vocab_size: int, seq
             num_layers=int(model_cfg["num_layers"]),
             dropout_input=float(model_cfg.get("dropout_input", 0.0)),
             dropout_hidden=float(model_cfg.get("dropout_hidden", 0.0)),
+            normalization_strategy=normalization_strategy,
         )
+
     if model_name == "cnn":
         return CNNRegressor(
             vocab_size=vocab_size,
@@ -190,7 +194,9 @@ def build_model(model_name: str, model_cfg: dict[str, Any], vocab_size: int, seq
             dropout_input=float(model_cfg.get("dropout_input", 0.0)),
             dropout_hidden=float(model_cfg.get("dropout_hidden", 0.0)),
             fc_dim=int(model_cfg["fc_dim"]),
+            normalization_strategy=normalization_strategy,
         )
+
     if model_name == "lstm":
         return LSTMRegressor(
             vocab_size=vocab_size,
@@ -200,7 +206,9 @@ def build_model(model_name: str, model_cfg: dict[str, Any], vocab_size: int, seq
             dropout_hidden=float(model_cfg.get("dropout_hidden", 0.0)),
             bidirectional=bool(model_cfg.get("bidirectional", False)),
             fc_dim=int(model_cfg["fc_dim"]),
+            normalization_strategy=normalization_strategy,
         )
+
     if model_name == "cnn_lstm":
         return CNNLSTMRegressor(
             vocab_size=vocab_size,
@@ -212,7 +220,9 @@ def build_model(model_name: str, model_cfg: dict[str, Any], vocab_size: int, seq
             dropout_hidden=float(model_cfg.get("dropout_hidden", 0.0)),
             bidirectional=bool(model_cfg.get("bidirectional", False)),
             fc_dim=int(model_cfg["fc_dim"]),
+            normalization_strategy=normalization_strategy,
         )
+
     if model_name == "lstm_cnn":
         return LSTMCNNRegressor(
             vocab_size=vocab_size,
@@ -224,7 +234,9 @@ def build_model(model_name: str, model_cfg: dict[str, Any], vocab_size: int, seq
             cnn_channels=list(model_cfg["cnn_channels"]),
             kernel_size=int(model_cfg["kernel_size"]),
             fc_dim=int(model_cfg["fc_dim"]),
+            normalization_strategy=normalization_strategy,
         )
+
     if model_name == "transformer":
         return TransformerRegressor(
             vocab_size=vocab_size,
@@ -236,7 +248,9 @@ def build_model(model_name: str, model_cfg: dict[str, Any], vocab_size: int, seq
             dropout_input=float(model_cfg.get("dropout_input", 0.0)),
             dropout_hidden=float(model_cfg.get("dropout_hidden", 0.0)),
             pooling=str(model_cfg.get("pooling", "last")),
+            normalization_strategy=normalization_strategy,
         )
+
     raise ValueError(f"Unsupported model_name: {model_name}")
 
 
@@ -317,6 +331,7 @@ def train_single_run(config: dict[str, Any]) -> tuple[dict[str, Any], RunArtifac
     metrics = {
         "dataset": dataset_name,
         "model_name": model_name,
+        "normalization_strategy": config["model"].get("normalization_strategy", None),
         "seed": seed,
         "seq_len": data_module.bundle.seq_len,
         "vocab_size": data_module.bundle.vocab_size,

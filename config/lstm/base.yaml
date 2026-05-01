@@ -26,6 +26,7 @@ training:
   pin_memory: true
   evaluate_test: false
 model:
+  normalization_strategy: null
   hidden_dim: 64
   num_layers: 2
   fc_dim: 96

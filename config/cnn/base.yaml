@@ -26,6 +26,7 @@ training:
   pin_memory: true
   evaluate_test: false
 model:
+  normalization_strategy: null
   channels: [32, 64, 128]
   kernel_size: 5
   fc_dim: 128
