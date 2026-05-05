@@ -26,7 +26,7 @@ We then create disjoint splits with increasing distribution shift:
 - Train (ID): Low mutation distance; used for supervised training.
 - Validation (ID) (val_id.csv): 10% random holdout from the train distribution; used only for early stopping and training stability.
 - Validation (near-OOD) (val_ood.csv): Moderately shifted sequences; used for hyperparameter selection, encouraging robustness rather than pure ID performance. Capped to a fixed size (5,000) for stable and comparable tuning.
-- Target Unlabeled (target_unlabeled.csv): Additional near-OOD data not used for validation; intended for self-supervised learning / domain adaptation (labels present but ignored during training).
+- Target Unlabeled (target_unlabeled.csv): Additional near-OOD data not used for validation; intended for self-supervised learning / domain adaptation (labels present but ignored during training). An important point is to be made here: In classical unsupervised domain adaptation, the unlabeled target data is assumed to follow the same distribution as the final test data. In contrast, we deliberately relax this assumption: the target domain is drawn from a less shifted distribution than the final test domain. This setting reflects a more realistic scenario in biological sequence design, where only moderately perturbed variants are available during training, while the goal is to generalize to more extreme mutations. It further enables us to study whether domain adaptation methods improve extrapolation beyond the observed target distribution, rather than merely aligning to it.
 - Test (far-OOD): Highest mutation distances; used only for final evaluation.
 
 For TFBind8, mutation-distance bands are fixed (train: 1–5, val_ood: 6, test: 7–8).
