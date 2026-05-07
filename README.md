@@ -1,6 +1,8 @@
 # SSL for OOD Molecule Data
 
-In this repository we explore evaluate self-supervised learning methods for measuring out-of-distribution domain shift in 3 molecular datasets.
+In this repository we explore and evaluate self-supervised learning and domain adaptation methods for out-of-distribution (OOD) generalization on molecular sequence datasets.
+
+Task: predict a scalar biological property from sequence input.
 
 ## Data
 
@@ -8,26 +10,155 @@ In this repository we explore evaluate self-supervised learning methods for meas
 
 We use three sequence–function datasets that differ in modality, sequence length, and mutation structure:
 
-- GFP – Protein fluorescence prediction (taken from https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/tree/main/DMS_substitutions where we selected for DMS_id=='GFP_AEQVI_Sarkisyan_2016')
-- AAV – AAV capsid fitness landscape (taken from https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/tree/main/DMS_substitutions where we selected for DMS_id=='CAPSD_AAV2S_Sinai_2021')
+- GFP – Protein fluorescence prediction (taken from https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/tree/main/DMS_substitutions where we selected for `DMS_id=='GFP_AEQVI_Sarkisyan_2016'`)
+- AAV – AAV capsid fitness landscape (taken from https://huggingface.co/datasets/OATML-Markslab/ProteinGym_v1/tree/main/DMS_substitutions where we selected for `DMS_id=='CAPSD_AAV2S_Sinai_2021'`)
 - TFBind8 – DNA–protein binding (TFBind8, SIX6_REF_R1; Design-Bench)
 
 All datasets are converted to a common CSV schema:
-sequence (string), label (float), mut_dist (mutation distance), split.
 
-All mutation distances are computed by using a wild type. The wild types for GFP and AAV are provided by protein gym in the column "target_seq". The wild type for TFBind8 got selected randomly.
+- `sequence` (string)
+- `label` (float)
+- `mut_dist` (mutation distance)
+- `split`
 
-### Split Strategy (ID → near-OOD → far-OOD)
+All mutation distances are computed with respect to a wild type sequence.  
+The wild types for GFP and AAV are provided by ProteinGym in the `target_seq` column.  
+The wild type for TFBind8 was selected randomly.
 
-Our goal is to study out-of-distribution (OOD) generalization and domain adaptation under a controlled and interpretable shift. For all datasets, we define a core (wild-type or anchor sequence) and compute Hamming distance (mut_dist) to that core.
+---
+
+## Split Strategy (ID → near-OOD → far-OOD)
+
+Our goal is to study out-of-distribution (OOD) generalization and domain adaptation under a controlled and interpretable distribution shift.
+
+For all datasets, we define a wild type / anchor sequence and compute Hamming distance (`mut_dist`) to that sequence.
 
 We then create disjoint splits with increasing distribution shift:
 
-- Train (ID): Low mutation distance; used for supervised training.
-- Validation (ID) (val_id.csv): 10% random holdout from the train distribution; used only for early stopping and training stability.
-- Validation (near-OOD) (val_ood.csv): Moderately shifted sequences; used for hyperparameter selection, encouraging robustness rather than pure ID performance. Capped to a fixed size (5,000) for stable and comparable tuning.
-- Target Unlabeled (target_unlabeled.csv): Additional near-OOD data not used for validation; intended for self-supervised learning / domain adaptation (labels present but ignored during training). An important point is to be made here: In classical unsupervised domain adaptation, the unlabeled target data is assumed to follow the same distribution as the final test data. In contrast, we deliberately relax this assumption: the target domain is drawn from a less shifted distribution than the final test domain. This setting reflects a more realistic scenario in biological sequence design, where only moderately perturbed variants are available during training, while the goal is to generalize to more extreme mutations. It further enables us to study whether domain adaptation methods improve extrapolation beyond the observed target distribution, rather than merely aligning to it.
-- Test (far-OOD): Highest mutation distances; used only for final evaluation.
+- `train.csv`  
+  Low mutation distance in-distribution (ID) data used for supervised training.
 
-For TFBind8, mutation-distance bands are fixed (train: 1–5, val_ood: 6, test: 7–8).
-For GFP and AAV, bands are defined via dataset-specific mutation-distance quantiles to ensure meaningful shift while retaining sufficient sample sizes.
+- `val_id.csv`  
+  Random 10% holdout sampled from the training distribution. Used for early stopping and training stability.
+
+- `val_ood.csv`  
+  Moderately shifted near-OOD validation data used for hyperparameter selection.
+
+- `target_close_full.csv`  
+  Full close OOD target dataset sampled from a moderately shifted mutation-distance regime.
+
+- `target_close.csv`  
+  Random subset of `target_close_full.csv` to match to the exact same size as `target_test.csv`.
+
+- `target_test_full.csv`  
+  Full far OOD target dataset sampled directly from the original test distribution using stratified sampling over mutation distance.
+
+- `target_test.csv`  
+  Capped version of `target_test_full.csv` (maximum 5,000 samples).
+
+- `test.csv`  
+  Remaining far-OOD test data used exclusively for final evaluation.
+
+---
+
+## Domain Adaptation Setup
+
+A central focus of this project is evaluating whether domain adaptation methods generalize *beyond* the observed target domain.
+
+Classical unsupervised domain adaptation assumes that the unlabeled target data available during training and the final test distribution follow approximately the same distribution.
+
+We relax that assumption and explicitly compare the classical setting against a more realistic extrapolation setting for biological sequence design.
+
+### 1. Classical UDA Setting
+
+`target_test.csv` is sampled directly from the same mutation-distance regime as `test.csv`.
+
+This represents the standard assumption in unsupervised domain adaptation:
+target and test distributions are approximately aligned.
+
+### 2. Extrapolative UDA Setting
+
+`target_close.csv` comes from a mutation-distance regime that is closer to the training data than the final test distribution.
+
+This setting studies whether domain adaptation methods improve robustness beyond the observed target domain, rather than merely aligning to the final test distribution.
+
+---
+
+## Mutation Distance Splits
+
+### TFBind8
+
+- Train: mutation distances 1–5
+- Val OOD: 6
+- Target Close: 6
+- Test / Target Test: 7–8
+
+### GFP
+
+- Train: mutation distances 1–3
+- Val OOD: 4
+- Target Close: 5
+- Test / Target Test: 6–15
+
+### AAV
+
+- Train: mutation distances 1–4
+- Val OOD: 5
+- Target Close: 6
+- Test / Target Test: 7–20
+
+For the final test regime, `target_test` and `test` are generated by a stratified split over mutation distance to preserve the mutation-distance distribution in both datasets.
+
+`target_close.csv` is additionally size-matched to `target_test.csv`.
+
+---
+
+## Models
+
+We currently evaluate the following model classes:
+
+1. Random Forest Regressor
+2. MLP
+3. CNN
+4. LSTM
+5. CNN-LSTM
+6. LSTM-CNN
+7. Transformer
+
+All deep learning models are implemented in PyTorch and trained with:
+
+- AdamW
+- ReduceLROnPlateau
+- Early stopping
+- Random-search hyperparameter optimization
+
+Primary evaluation metric:
+
+- MAE (mean absolute error)
+
+Secondary metric:
+
+- STD of absolute errors
+
+---
+
+## Domain Adaptation Methods
+
+The repository contains implementations and experiments for several domain adaptation and normalization approaches, including:
+
+- **AdaBN (Adaptive Batch Normalization)**  
+  Updates batch normalization statistics using target-domain data to reduce distribution mismatch.
+
+- **CMD (Central Moment Discrepancy)**  
+  Aligns feature distributions between source and target domains by matching higher-order statistical moments.
+
+- **DANN (Domain-Adversarial Neural Network)**  
+  Learns domain-invariant feature representations through adversarial training with a domain classifier.
+
+- **Pseudo-Labeling**  
+  Generates pseudo-labels for unlabeled target data and incorporates them into supervised training.
+
+- **Consistency Regularization**  
+  Encourages stable predictions under sequence perturbations or augmentations.
+
+---
