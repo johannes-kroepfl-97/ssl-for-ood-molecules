@@ -142,9 +142,9 @@ Secondary metric:
 
 ---
 
-## Domain Adaptation Methods
+## Domain Adaptation and Semi-Supervised Methods
 
-The repository contains implementations and experiments for several domain adaptation and normalization approaches, including:
+The repository contains implementations and experiments for several domain adaptation, semi-supervised learning, and normalization approaches, including:
 
 - **AdaBN (Adaptive Batch Normalization)**  
   Updates batch normalization statistics using target-domain data to reduce distribution mismatch.
@@ -152,13 +152,18 @@ The repository contains implementations and experiments for several domain adapt
 - **CMD (Central Moment Discrepancy)**  
   Aligns feature distributions between source and target domains by matching higher-order statistical moments.
 
-- **DANN (Domain-Adversarial Neural Network)**  
-  Learns domain-invariant feature representations through adversarial training with a domain classifier.
-
 - **Pseudo-Labeling**  
-  Generates pseudo-labels for unlabeled target data and incorporates them into supervised training.
+  Generates pseudo-labels for unlabeled target data and incorporates them into supervised retraining.
+
+- **Uncertainty-Filtered Pseudo-Labeling**  
+  Uses MC-dropout uncertainty estimation to retain only high-confidence pseudo-labeled target samples.
+
+- **Mean Teacher**  
+  Uses an exponential moving average (EMA) teacher model to generate stable consistency targets for unlabeled target data.
 
 - **Consistency Regularization**  
-  Encourages stable predictions under sequence perturbations or augmentations.
+  Encourages stable predictions under sequence perturbations or stochastic model noise.
+
+Current experiments focus particularly on how pseudo-label quality, uncertainty estimation, and consistency-based adaptation behave under extrapolative OOD shift.
 
 ---
