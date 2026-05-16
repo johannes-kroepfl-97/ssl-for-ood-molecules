@@ -4,6 +4,8 @@ In this repository we explore and evaluate self-supervised learning and domain a
 
 Task: predict a scalar biological property from sequence input.
 
+Research Question: How should semi-supervised learning (SSL) and unsupervised domain adaptation (UDA) benchmarks for biological sequence modeling be constructed and evaluated to realistically measure extrapolative generalization under mutation-distance shift, where unlabeled adaptation data originates from intermediate domains while deployment occurs farther out-of-distribution?
+
 ## Data
 
 ### Datasets
